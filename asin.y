@@ -14,6 +14,7 @@ int si; /* Desplazamiento del segmento de código */
 int dvartmp; /* Utilizado para guardar el desplazamiento del segmento de
                 variables del contexto global mientras se utiliza un
                 contexto local. */
+int fail; /* Se utiliza en algunas definiciones para comprobar errores */
 
 TINFO terror = {T_ERROR, 0};
 TINFO tlogico = {T_LOGICO, TALLA_LOGICO};
@@ -111,16 +112,24 @@ declaracion :
 declaracionVariable :
   tipoSimple TK_ID TK_COLON
 {
-    if (!inserta_simbolo($2, VARIABLE, $1.tipo, dvar, contexto, -1))
+    if (inserta_simbolo($2, VARIABLE, $1.tipo, dvar, contexto, -1))
+        dvar += $1.talla;
+    else
         yyerror("Identificador ya definido");
-    dvar += $1.talla;
 }
 | tipoSimple TK_ID TK_OBCK TK_CTE TK_CBCK TK_COLON
 {
-    int ref = inserta_info_array($1.tipo, $4);
-    if (!inserta_simbolo($2, VARIABLE, T_ARRAY, dvar, contexto, ref))
-        yyerror("Identificador ya definido");
-    dvar += $4 * $1.talla;
+    int ref;
+    
+    if ($4 <= 0)
+        yyerror("El tamaño de un array debe ser mayor o igual que 1");
+    else {
+        ref = inserta_info_array($1.tipo, $4);
+        if (inserta_simbolo($2, VARIABLE, T_ARRAY, dvar, contexto, ref))
+            dvar += $4 * $1.talla;
+        else
+            yyerror("Identificador ya definido");
+    }
 }
 ;
 
@@ -157,11 +166,14 @@ cabeceraFuncion :
     dvartmp = dvar;
     dvar = 0;
     dpar = TALLA_SEGENLACES;
+    fail = 0;
 }
   TK_OPAR parametrosFormales TK_CPAR
 {
-    if(!inserta_simbolo($2, FUNCION, $1.tipo, si, GLOBAL, $5))
+    if(!inserta_simbolo($2, FUNCION, $1.tipo, si, GLOBAL, $5)) {
         yyerror("Identificador ya definido");
+        fail = 1;
+    }
     else
         dvar += $1.talla;
 }
@@ -174,69 +186,134 @@ parametrosFormales :
 }
 |
 {
-    $$ = inserta_info_dominio(-1, T_VACIO);
+    if (!fail)
+        $$ = inserta_info_dominio(-1, T_VACIO);
 }
 ;
 
 listaParametrosFormales :
   tipoSimple TK_ID
 {
-    if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1))
-        yyerror("Identificador ya definido");
-    else {
+    if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1)) {
+        yyerror("Parámetro ya definido");
+        fail = 1;
+    }
+    else if (!fail) {
         $$ = inserta_info_dominio(-1, $1.tipo);
         dpar += $1.talla;
     }
 }
 | tipoSimple TK_ID TK_COMMA
 {
-    if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1))
-        yyerror("Identificador ya definido");
+    if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1)) {
+        yyerror("Parámetro ya definido");
+        fail = 1;
+    }
     else
         dpar += $1.talla;
 }
   listaParametrosFormales
 {
     $$ = $5;
-    inserta_info_dominio($$, $1.tipo);
+    if (!fail)
+        inserta_info_dominio($$, $1.tipo);
 }
 ;
 
-bloque : TK_OCLY declaracionVariableLocal listaInstrucciones TK_CCLY
-       ;
-
-declaracionVariableLocal :
-| declaracionVariableLocal declaracionVariable
+bloque :
+  TK_OCLY declaracionVariableLocal listaInstrucciones TK_CCLY
 ;
 
-listaInstrucciones : listaInstrucciones instruccion
-                   |
-                   ;
+declaracionVariableLocal :
+declaracionVariableLocal declaracionVariable
+|
+;
 
-instruccion : TK_OCLY listaInstrucciones TK_CCLY
-            | instruccionExpresion
-            | instruccionEntradaSalida
-            | instruccionSeleccion
-            | instruccionIteracion
-            | instruccionSalto
-            ;
+listaInstrucciones :
+  listaInstrucciones instruccion
+|
+;
 
-instruccionExpresion : TK_COLON
-                     | expresion TK_COLON
-                     ;
+instruccion :
+  TK_OCLY listaInstrucciones TK_CCLY
+| instruccionExpresion
+| instruccionEntradaSalida
+| instruccionSeleccion
+| instruccionIteracion
+| instruccionSalto
+;
 
-instruccionEntradaSalida : TK_READ TK_OPAR TK_ID TK_CPAR TK_COLON
-                         | TK_PRINT TK_OPAR expresion TK_CPAR TK_COLON
-                         ;
+instruccionExpresion :
+  TK_COLON
+| expresion TK_COLON
+;
 
-instruccionSeleccion : TK_IF TK_OPAR expresion TK_CPAR instruccion TK_ELSE instruccion
-                     ;
+instruccionEntradaSalida :
+  TK_READ TK_OPAR TK_ID TK_CPAR TK_COLON
+{
+    SIMB simb = obtener_simbolo($3);
+    if (simb.categoria != NULO) {
+        if (simb.tipo == T_ENTERO) {
+            
+        }
+        else
+            yyerror("La instrucción read solo acepta parámetros de tipo "
+                    "entero");
+    }
+}
+| TK_PRINT TK_OPAR expresion TK_CPAR TK_COLON
+{
+    switch ($3.tipo) {
+        case T_LOGICO:
+            break;
+        case T_ENTERO:
+            break;
+        default:
+            yyerror("La instrucción print solo acepta parámetros de tipos "
+                    "simples");
+    }
+}
+;
 
-instruccionIteracion : TK_WHILE TK_OPAR expresion TK_CPAR instruccion
-                     ;
+instruccionSeleccion :
+  TK_IF TK_OPAR expresion TK_CPAR
+{
+    if ($3.tipo == T_LOGICO) {
+    }
+    else
+        yyerror("La expresión condicional de la instrucción if no es "
+                "del tipo lógico");
+}
+  instruccion TK_ELSE instruccion
+{
+}
+;
 
-instruccionSalto : TK_RETURN expresion TK_COLON
-                 ;
+instruccionIteracion :
+  TK_WHILE TK_OPAR expresion TK_CPAR
+{
+    if ($3.tipo == T_LOGICO) {
+    }
+    else
+        yyerror("La expresión condicional de la instrucción while no es "
+                "del tipo lógico");
+}
+  instruccion
+{
+}
+;
+
+instruccionSalto :
+  TK_RETURN expresion TK_COLON
+{
+    INF inf = obtener_info_funcion(-1); /* Info de la función actual */
+    if (inf.tipo == $2.tipo) {
+        
+    } else
+        yyerror("El tipo del valor devuelto no coincide con el de "
+                "la función");
+}
+;
 
 expresion :
   expresionCondicional
@@ -247,20 +324,15 @@ expresion :
 {
     SIMB simb = obtener_simbolo($1);
     
-    if (simb.categoria != NULO)
+    if (simb.categoria == VARIABLE || simb.categoria == PARAMETRO) {
         switch (simb.tipo) {
             case T_LOGICO:
-                switch ($3.tipo) {
-                    case T_LOGICO:
-                        $$ = tlogico;
-                        break;
-                    case T_ENTERO:
-                        $$ = tlogico;
-                        break;
-                    default:
-                        yyerror("Valor lógico asignado a un valor no válido");
-                        printf("*** %d\n", $3.tipo);
-                        $$ = terror;
+                if ($3.tipo == T_LOGICO)
+                    $$ = tlogico;
+                else {
+                    yyerror("Variable de tipo lógico asignado a un valor de "
+                            "tipo no lógico");
+                    $$ = terror;
                 }
                 break;
             case T_ENTERO:
@@ -272,37 +344,51 @@ expresion :
                         $$ = tentero;
                         break;
                     default:
-                        yyerror("Entero asignado a un valor no válido");
-                        printf("*** %d\n", $3.tipo);
                         $$ = terror;
                 }            
                 break;
-            case T_ARRAY:
-                if ($3.tipo == T_ARRAY)
-                    $$ = $3;
-                else
-                    yyerror("Array asignado a un valor no válido");
-                    $$ = terror;
-                break;
             default:
+                if (simb.tipo != T_ERROR && $3.tipo != T_ERROR)
+                    yyerror("Asignación no válida");
                 $$ = terror;
         }
-    else
+    }
+    else {
+        if (simb.categoria == FUNCION)
+            yyerror("Asignación no válida");
         $$ = terror;
+    }
+        
 }
 | TK_ID TK_OBCK expresion TK_CBCK operadorAsignacion expresion
 {
+    DIM dim;
     SIMB simb = obtener_simbolo($1);
     
-    if (simb.categoria != NULO) {
-        if ($3.tipo == T_ENTERO)
-            /* TODO: Conversion y reconocimiento de tipos */
-            $$ = $6;
+    if (simb.categoria != NULO)
+        if (simb.tipo == T_ARRAY) {
+            if ($3.tipo == T_ENTERO) {
+                dim = obtener_array (simb.ref);
+                switch (dim.tipo) {
+                    case T_ENTERO:
+                        $$ = tentero;
+                        break;
+                    case T_LOGICO:
+                        $$ = tlogico;
+                        break;
+                    default:
+                        $$ = terror;
+                }
+            }
+            else {
+                yyerror("El indice del array no es del tipo entero");
+                $$ = terror;
+            }
+        }
         else {
-            yyerror("Asignacion con desplazamiento de array no entero");
+            yyerror("La variable no es un array");
             $$ = terror;
         }
-    }
     else
         $$ = terror;
 }
@@ -315,8 +401,10 @@ expresionCondicional :
 }
 | expresionCondicional operadorLogico expresionIgualdad
 {
-    /* TODO: Conversion de tipos*/
-    $$ = tlogico;
+    if ($1.tipo == T_LOGICO && $3.tipo == T_LOGICO)
+        $$ = tlogico;
+    else
+        $$ = terror;
 }
 ;
 
@@ -488,44 +576,53 @@ expresionSufija :
 }
 ;
 
-parametrosActuales : listaParametrosActuales
-                   |
-                   ;
+parametrosActuales :
+  listaParametrosActuales
+|
+;
 
-listaParametrosActuales : expresion
-                        | expresion TK_COMMA listaParametrosActuales
-                        ;
+listaParametrosActuales :
+  expresion
+| expresion TK_COMMA listaParametrosActuales
+;
 
-operadorAsignacion : TK_ASIG
-                   | TK_SUMASIG
-                   | TK_SUBASIG
-                   ;
+operadorAsignacion :
+  TK_ASIG
+| TK_SUMASIG
+| TK_SUBASIG
+;
 
-operadorLogico : TK_AND
-               | TK_OR 
-               ;
+operadorLogico :
+  TK_AND
+| TK_OR
+;
 
-operadorIgualdad : TK_EQUAL
-                 | TK_NEQUAL
-                 ;
+operadorIgualdad :
+  TK_EQUAL
+| TK_NEQUAL
+;
 
-operadorRelacional : TK_LESS
-                   | TK_GREAT
-                   | TK_LESSEQ
-                   | TK_GREATEQ
-                   ;
+operadorRelacional :
+  TK_LESS
+| TK_GREAT
+| TK_LESSEQ
+| TK_GREATEQ
+;
 
-operadorAditivo : TK_PLUS
-                | TK_MINUS
-                ;
+operadorAditivo :
+  TK_PLUS
+| TK_MINUS
+;
 
-operadorMultiplicativo : TK_MULT
-                       | TK_DIV
-                       ;
+operadorMultiplicativo :
+  TK_MULT
+| TK_DIV
+;
 
-operadorIncremento : TK_INC
-                   | TK_DEC
-                   ;
+operadorIncremento :
+  TK_INC
+| TK_DEC
+;
 
 operadorUnario :
   TK_PLUS

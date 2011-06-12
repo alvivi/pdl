@@ -2,7 +2,7 @@
 cmc: main.c alex-lex.o asin-yac.o utils.o
 	gcc -o cmc main.c alex-lex.o asin-yac.o utils.o -lfl
 	@tput setaf 2
-	@ECHO [INFO] Utiliza \"make test\" para ejecutar las pruebas
+	@echo [INFO] Utiliza \"make test\" para ejecutar las pruebas
 	@tput op
 
 asin-yac.o: asin-yac.c header.h
@@ -27,46 +27,22 @@ clean:
 
 test: cmc
 	@tput setaf 2
-	@ECHO [TEST] a00.c : Debe devolver 1 error y 4 warnings
+	@echo [TEST] a00.c : Debe devolver 1 error y 4 warnings
 	@tput op
 	- ./cmc tests/a00.c
 	@tput setaf 2
-	@ECHO [TEST] a01.c : Debe compilar correctamente
+	@echo [TEST] a01.c : Debe compilar correctamente
 	@tput op
 	./cmc tests/a01.c
 	@tput setaf 2
-	@ECHO [TEST] a02.c : Debe compilar correctamente
+	@echo [TEST] a02.c : Debe compilar correctamente
 	@tput op
 	./cmc tests/a02.c
 	@tput setaf 2
-	@ECHO [TEST] a03.c : Debe compilar correctamente
+	@echo [TEST] a03.c : Debe compilar correctamente
 	@tput op
 	./cmc tests/a03.c
 	@tput setaf 2
-	@ECHO [TEST] a04.c : Debe compilar correctamente. Mostrando TDS
+	@echo [TEST] a04.c : Debe compilar correctamente. Mostrando TDS
 	@tput op
 	./cmc -t tests/a04.c
-	@tput setaf 2
-	@ECHO [TEST] c00.c : Debe compilar correctamente
-	@tput op
-	./cmc tests/c00.c
-	@tput setaf 2
-	@ECHO [TEST] c01.c : Debe compilar correctamente
-	@tput op	
-	./cmc tests/c01.c
-	@tput setaf 2
-	@ECHO [TEST] c02.c : Debe compilar correctamente
-	@tput op	
-	./cmc tests/c02.c
-	@tput setaf 2
-	@ECHO [TEST] c03.c : Debe compilar correctamente
-	@tput op	
-	./cmc tests/c03.c
-	@tput setaf 2
-	@ECHO [TEST] c04.c : Debe compilar correctamente
-	@tput op	
-	./cmc tests/c04.c
-	@tput setaf 2
-	@ECHO [TEST] c05.c : Debe compilar correctamente
-	@tput op	
-	./cmc tests/c05.c

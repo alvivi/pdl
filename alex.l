@@ -98,7 +98,7 @@ void make_id()
 {
     char *t;
     if (yyleng > 14) {
-        printf("WARNING (%d): identificador \"%s\" truncado\n", yylineno,
+        printf("Linea %d. Aviso: identificador \"%s\" truncado\n", yylineno,
                yytext);
         yyleng = 14;
     }
@@ -119,7 +119,7 @@ void make_int()
 void make_real()
 {
     char *t;
-    printf("WARNING (%d): constante real truncada a entera\n", yylineno);
+    printf("Linea %d. Aviso: constante real truncada a entera\n", yylineno);
     yyleng = strcspn(yytext, ".");
     t = (char *) malloc(yyleng + 1);
     strncpy(t, yytext, yyleng);
