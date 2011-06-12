@@ -98,6 +98,10 @@ programa :
 }
   secuenciaDeclaraciones
 {
+    SIMB simb = obtener_simbolo("main");
+    if (simb.categoria == NULO)
+        yyerror("Función main no declarada");
+    
     if (ver_tds) mostrar_tds();
     descarga_contexto(GLOBAL);
 }
