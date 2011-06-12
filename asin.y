@@ -539,14 +539,21 @@ expresionSufija :
 }
 | TK_ID TK_OPAR parametrosActuales TK_CPAR
 {
+    int cmp;
     SIMB simb = obtener_simbolo($1);
     
     if (simb.categoria != NULO)
-        if (simb.categoria == FUNCION)
-            if (!compara_dominio(simb.ref, $3))
+        if (simb.categoria == FUNCION) {
+            #if __APPLE__
+                cmp = !compara_dominio(simb.ref, $3);
+            #else
+                cmp = compara_dominio(simb.ref, $3);
+            #endif
+            if (cmp)
                 $$ = obtener_tipo(simb);
             else
                 $$ = terror;
+        }
         else {
             yyerror("Llamada a función con un identificador no válido");
             $$ = terror;            
@@ -706,4 +713,9 @@ int obtener_talla (SIMB simb)
         default:
             return 0;
     }
+}
+
+int compara_dominio_macos(int refx, int refy)
+{
+    return !compara_dominio(refx, refy);
 }
