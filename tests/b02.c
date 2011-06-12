@@ -10,7 +10,7 @@ int suma (int a, int b)
 
   aux = (a > b) || ( a >= b);
   if ( aux )
-    aux = c ;                 //**** Tipos incompatibles
+    aux = c ;                 //**** Tipos incompatibles (permitido)
   else { 
     a = d + b;                //**** Tipos incompatibles
     aux = aux && ( ! d[a]);

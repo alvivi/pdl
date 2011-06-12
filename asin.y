@@ -330,14 +330,27 @@ expresion :
     if (simb.categoria == VARIABLE || simb.categoria == PARAMETRO) {
         switch (simb.tipo) {
             case T_LOGICO:
-                if ($3.tipo == T_LOGICO)
-                    $$ = tlogico;
-                else {
-                    if ($3.tipo != T_ERROR)
-                        yyerror("Variable de tipo lógico asignado a un valor"
+                switch ($3.tipo) {
+                    case T_LOGICO:
+                        $$ = tlogico;
+                        break;
+                    case T_ENTERO:
+                        $$ = tlogico;
+                        break;
+                    default:
+                        if ($3.tipo != T_ERROR)
+                        yyerror("Variable de tipo lógico asignado a un valor "
                                 "de tipo no lógico");
-                    $$ = terror;
-                }
+                        $$ = terror;
+                }            
+                // if ($3.tipo == T_LOGICO)
+                //     $$ = tlogico;
+                // else {
+                //     if ($3.tipo != T_ERROR)
+                //         yyerror("Variable de tipo lógico asignado a un valor"
+                //                 "de tipo no lógico");
+                //     $$ = terror;
+                // }
                 break;
             case T_ENTERO:
                 switch ($3.tipo) {
@@ -713,9 +726,4 @@ int obtener_talla (SIMB simb)
         default:
             return 0;
     }
-}
-
-int compara_dominio_macos(int refx, int refy)
-{
-    return !compara_dominio(refx, refy);
 }

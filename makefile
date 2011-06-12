@@ -43,6 +43,46 @@ test: cmc
 	@tput op
 	./cmc tests/a03.c
 	@tput setaf 2
-	@echo [TEST] a04.c : Debe compilar correctamente. Mostrando TDS
+	@echo [TEST] a04.c : Debe compilar correctamente.
 	@tput op
-	./cmc -t tests/a04.c
+	./cmc tests/a04.c
+	@tput setaf 2
+	@echo [TEST] b01.c : Debe devolver 5 errores
+	@tput op
+	- ./cmc tests/b01.c
+	@tput setaf 2
+	@echo [TEST] b02.c : Debe devolver 4 errores
+	@tput op
+	- ./cmc tests/b02.c
+	@tput setaf 2
+	@echo [TEST] b03.c : Debe devolver 5 errores
+	@tput op
+	- ./cmc tests/b03.c
+	@tput setaf 2
+	@echo [TEST] b04.c : Debe devolver 9 errores
+	@tput op
+	- ./cmc tests/b04.c
+	@tput setaf 2
+	@echo [TEST] c00.c : Debe compilar correctamente
+	@tput op
+	./cmc tests/c00.c
+	@tput setaf 2
+	@echo [TEST] c01.c : Debe compilar correctamente
+	@tput op
+	./cmc tests/c01.c
+	@tput setaf 2
+	@echo [TEST] c02.c : Debe compilar correctamente
+	@tput op
+	./cmc tests/c02.c
+	@tput setaf 2
+	@echo [TEST] c03.c : Debe compilar correctamente
+	@tput op
+	./cmc tests/c03.c
+	@tput setaf 2
+	@echo [TEST] c04.c : Debe compilar correctamente
+	@tput op
+	./cmc tests/c04.c
+	@tput setaf 2
+	@echo [TEST] c05.c : Debe compilar correctamente
+	@tput op
+	./cmc tests/c05.c

@@ -9,7 +9,7 @@ int f11(int p1, bool p11)
 { 
   int a11;
 
-  p11 = p1;                   // **** Tipos incompatibles 
+  p11 = p1;                   // **** Tipos incompatibles (permitido) 
   return p11;                 // **** El resultado debe ser "int"
 }
 
@@ -38,7 +38,7 @@ int main()
   c = f1(c, a, d) + c;        // **** Tipos parametros incompatibles
   a = f2;                     // **** La funcion tiene parametros
   c = f1(c, f2(a), d) || c; 
-  c = d = 5 ;                 // **** Tipos incompatibles en asignacion
+  c = d = 5 ;                 // **** Tipos incompatibles (permitido)
   a = 1;
   while (a < 12 ) { print (a); a++; }
 }
