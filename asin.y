@@ -71,8 +71,11 @@ TINFO tentero = {T_ENTERO, TALLA_ENTERO};
 %token <id> TK_ID         /* id */
 
 %type <tinfo> tipoSimple
+
 %type <ref> listaParametrosFormales
 %type <ref> parametrosFormales
+%type <ref> listaParametrosActuales
+%type <ref> parametrosActuales
 
 %type <tinfo> expresion
 %type <tinfo> expresionSufija
@@ -306,7 +309,7 @@ instruccionSalto :
     INF inf = obtener_info_funcion(-1); /* Info de la función actual */
     if (inf.tipo == $2.tipo) {
         
-    } else
+    } else if ($2.tipo != T_ERROR) 
         yyerror("El tipo del valor devuelto no coincide con el de "
                 "la función");
 }
@@ -320,15 +323,15 @@ expresion :
 | TK_ID operadorAsignacion expresion
 {
     SIMB simb = obtener_simbolo($1);
-    
     if (simb.categoria == VARIABLE || simb.categoria == PARAMETRO) {
         switch (simb.tipo) {
             case T_LOGICO:
                 if ($3.tipo == T_LOGICO)
                     $$ = tlogico;
                 else {
-                    yyerror("Variable de tipo lógico asignado a un valor de "
-                            "tipo no lógico");
+                    if ($3.tipo != T_ERROR)
+                        yyerror("Variable de tipo lógico asignado a un valor"
+                                "de tipo no lógico");
                     $$ = terror;
                 }
                 break;
@@ -341,6 +344,8 @@ expresion :
                         $$ = tentero;
                         break;
                     default:
+                        if ($3.tipo != T_ERROR)
+                            yyerror("Asignación no válida");
                         $$ = terror;
                 }            
                 break;
@@ -439,7 +444,8 @@ expresionAditiva :
     if ($1.tipo == T_ENTERO && $3.tipo == T_ENTERO)
         $$ = $1;
     else {
-        yyerror("Operación aditiva con un argumento no entero");
+        if ($1.tipo != T_ERROR && $3.tipo != T_ERROR)
+            yyerror("Operación aditiva con un argumento no entero");
         $$ = terror;
     }
 }
@@ -529,8 +535,20 @@ expresionSufija :
 }
 | TK_ID TK_OPAR parametrosActuales TK_CPAR
 {
-    $$ = tentero; /* temp */
-    /* TODO */
+    SIMB simb = obtener_simbolo($1);
+    
+    if (simb.categoria != NULO)
+        if (simb.categoria == FUNCION)
+            if (!compara_dominio(simb.ref, $3))
+                $$ = obtener_tipo(simb);
+            else
+                $$ = terror;
+        else {
+            yyerror("Llamada a función con un identificador no válido");
+            $$ = terror;            
+        }
+    else
+        $$ = terror;
 }
 | TK_ID operadorIncremento
 {
@@ -555,7 +573,12 @@ expresionSufija :
 {
     SIMB simb = obtener_simbolo($1);
     if (simb.categoria != NULO)
-        $$ = obtener_tipo(simb);
+        if (simb.categoria != FUNCION)
+            $$ = obtener_tipo(simb);
+        else {
+            yyerror("Referencia a función no válida");
+            $$ = terror;
+        }
     else
         $$ = terror;
 }
@@ -575,12 +598,25 @@ expresionSufija :
 
 parametrosActuales :
   listaParametrosActuales
+{
+    $$ = $1; /* redundante */
+}
 |
+{
+    $$ = inserta_info_dominio(-1, T_VACIO);
+}
 ;
 
 listaParametrosActuales :
   expresion
+{
+    $$ = inserta_info_dominio(-1, $1.tipo);
+}
 | expresion TK_COMMA listaParametrosActuales
+{
+    $$ = $3;
+    inserta_info_dominio($$, $1.tipo);
+}
 ;
 
 operadorAsignacion :
