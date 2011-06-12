@@ -203,20 +203,17 @@ listaParametrosFormales :
         dpar += $1.talla;
     }
 }
-| tipoSimple TK_ID TK_COMMA
+| tipoSimple TK_ID TK_COMMA listaParametrosFormales
 {
     if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1)) {
         yyerror("Parámetro ya definido");
         fail = 1;
     }
-    else
+    else {
         dpar += $1.talla;
-}
-  listaParametrosFormales
-{
-    $$ = $5;
-    if (!fail)
+        $$ = $4;
         inserta_info_dominio($$, $1.tipo);
+    }
 }
 ;
 
