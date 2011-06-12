@@ -123,6 +123,19 @@ typedef struct inf      /* Estructura para las funciones                     */
 /**** Macros, constantes, variables y estructuras propias (Alumnos) **********/
 /*****************************************************************************/
 
+/* Información del tipo de un no terminal, útil pata la comprobación de
+   tipos
+ */
+typedef struct tinfo 
+{
+    int tipo;
+    int talla;
+} TINFO;
+
+
+TINFO obtener_tipo (SIMB simb);
+int obtener_talla (SIMB simb);
+
 
 /*****************************************************************************/
 /******************* Perfil de las funciones de la libreria ******************/

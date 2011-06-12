@@ -5,7 +5,6 @@
 #include <stdio.h>
 
 #include "header.h"
-#include "error.h"
 #include "asin.h"
 
 #define RETURN_TOKEN(x) { if (verbosidad) ECHO; return (x); }
@@ -89,7 +88,7 @@ REAL  {DIGIT}*"."{DIGIT}+
 
 [[:space:]] /* Ignoramos los espacios */
 
-.       { error("Caracter no reconocido \"%s\"", yytext); }
+.       { yyerror("Caracter no reconocido"); }
 
 
 %%
@@ -99,7 +98,8 @@ void make_id()
 {
     char *t;
     if (yyleng > 14) {
-        printf("WARNING (%d): identificador \"%s\" truncado", yylineno, t);
+        printf("WARNING (%d): identificador \"%s\" truncado\n", yylineno,
+               yytext);
         yyleng = 14;
     }
     
@@ -119,7 +119,7 @@ void make_int()
 void make_real()
 {
     char *t;
-    printf("WARNING (%d): constante real truncada a entera", yylineno);
+    printf("WARNING (%d): constante real truncada a entera\n", yylineno);
     yyleng = strcspn(yytext, ".");
     t = (char *) malloc(yyleng + 1);
     strncpy(t, yytext, yyleng);
