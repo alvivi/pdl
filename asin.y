@@ -31,6 +31,7 @@ TINFO tentero = {T_ENTERO, TALLA_ENTERO};
                  parámetros) o referencia del tipo de operador */
     SIMB simb;
     TINFO tinfo; /* Informacion para la comprobación de tipos */
+    TPROG tprog;
 }
 
 
@@ -95,21 +96,36 @@ programa :
 {
     dvar = si = 0;
     carga_contexto(GLOBAL);
+    
+    /* Reservamos espacio para las variables globales */
+    $<tprog>$.lans_globales = crea_lans(si);
+    emite(INCTOP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(-1));
+    
+    /* Saltamos a la función main */
+    $<tprog>$.lans_main = crea_lans(si);
+    emite(GOTOS, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(-1));
 }
   secuenciaDeclaraciones
 {
+    /* Completamos la instrucción de salto a main */
     SIMB simb = obtener_simbolo("main");
-    if (simb.categoria == NULO)
+    if (simb.categoria == FUNCION)
+        completa_lans($<tprog>1.lans_main, cr_arg_etiqueta(simb.desp));
+    else
         yyerror("Función main no declarada");
+    
+    /* Completamos la instrucción de reseva de especio para las v. globales */
+    completa_lans($<tprog>1.lans_globales, cr_arg_entero(dvar));
     
     if (ver_tds) mostrar_tds();
     descarga_contexto(GLOBAL);
 }
 ;
 
-secuenciaDeclaraciones : declaracion
-                       | secuenciaDeclaraciones declaracion
-                       ;
+secuenciaDeclaraciones :
+  declaracion
+| secuenciaDeclaraciones declaracion
+;
 
 declaracion :
   declaracionVariable
@@ -157,9 +173,32 @@ tipoSimple :
 }
 ;
 
-declaracionFuncion : 
-  cabeceraFuncion bloque
+declaracionFuncion :
+  cabeceraFuncion
 {
+    /* Apilamos el frame pointer */
+    emite(PUSHFP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
+    /* Actualizamos el frame pointer a la posición actual de la pila */
+    emite(FPTOP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
+    /* Rservamos espacio para las variable locales */
+    $<ref>$ = crea_lans(si);
+    emite(INCTOP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(-1));
+}
+  bloque
+{
+    /* Completamos la instrucción de reseva de memoria local */
+    completa_lans($<ref>2, cr_arg_entero(dvar));
+    /* Actualizamos el tope de la pila al frame pointer  */
+    emite(TOPFP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
+    /* Actualizamos la pila */
+    emite(FPPOP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
+    
+    /* Devolvemos el flujo de ejucución */
+    if (es_main())
+        emite(FIN, cr_arg_nulo(), cr_arg_nulo (), cr_arg_nulo ());
+    else
+        emite(RET, cr_arg_nulo(), cr_arg_nulo (), cr_arg_nulo ());
+        
     if (ver_tds) mostrar_tds();
     descarga_contexto(LOCAL);
     dvar = dvartmp;

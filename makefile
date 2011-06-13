@@ -47,7 +47,7 @@ test: cmc
 	@tput op
 	./cmc tests/a04.c
 	@tput setaf 2
-	@echo [TEST] b01.c : Debe devolver 5 errores
+	@echo [TEST] b01.c : Debe devolver 6 errores
 	@tput op
 	- ./cmc tests/b01.c
 	@tput setaf 2

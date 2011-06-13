@@ -134,6 +134,13 @@ typedef struct tinfo
 } TINFO;
 
 
+typedef struct tprog
+{
+    int lans_globales;
+    int lans_main;
+} TPROG;
+
+
 TINFO obtener_tipo (SIMB simb);
 int obtener_talla (SIMB simb);
 
