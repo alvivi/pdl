@@ -1,3 +1,11 @@
+
+/*
+ * Domínguez Cartagena, Luis (luidoca@fiv.upv.es)
+ * Lanza Duarte, Gustavo (guslandu@fiv.upv.es)
+ * Vilanova Vidal, Álvaro (alvivi@fiv.upv.es)
+ */
+
+
 /*****************************************************************************/
 /*****************************************************************************/
 /**  Definiciones de variables y estructuras globales, asi como el perfil   **/
@@ -131,6 +139,8 @@ typedef struct tinfo
 {
     int tipo;
     int talla;
+    TIPO_ARG pos; /* NOTA: Posición de la variable en formato arg. (x, y), es
+                           decir, el valor devuelto por cr_arg_posicion */
 } TINFO;
 
 
@@ -140,9 +150,21 @@ typedef struct tprog
     int lans_main;
 } TPROG;
 
+typedef struct tinsif
+{
+    int lans_falso;
+    int lans_fin;
+} TINSIF;
+
+typedef struct tinswhile
+{
+    TIPO_ARG cond;
+    int lans_fin;
+} TINSWHILE;
 
 TINFO obtener_tipo (SIMB simb);
 int obtener_talla (SIMB simb);
+TIPO_ARG emite_entero_a_bool (TIPO_ARG entero);
 
 
 /*****************************************************************************/

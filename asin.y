@@ -1,4 +1,10 @@
 
+/*
+ * Domínguez Cartagena, Luis (luidoca@fiv.upv.es)
+ * Lanza Duarte, Gustavo (guslandu@fiv.upv.es)
+ * Vilanova Vidal, Álvaro (alvivi@fiv.upv.es)
+ */
+
 %{
 
 #include <stdio.h>
@@ -15,6 +21,7 @@ int dvartmp; /* Utilizado para guardar el desplazamiento del segmento de
                 variables del contexto global mientras se utiliza un
                 contexto local. */
 int fail; /* Se utiliza en algunas definiciones para comprobar errores */
+int finfunc = -1; /* LANS que apunta al fin de la función actual */
 
 TINFO terror = {T_ERROR, 0};
 TINFO tlogico = {T_LOGICO, TALLA_LOGICO};
@@ -32,6 +39,8 @@ TINFO tentero = {T_ENTERO, TALLA_ENTERO};
     SIMB simb;
     TINFO tinfo; /* Informacion para la comprobación de tipos */
     TPROG tprog;
+    TINSIF tinsif;
+    TINSWHILE tinswhile;
 }
 
 
@@ -87,7 +96,15 @@ TINFO tentero = {T_ENTERO, TALLA_ENTERO};
 %type <tinfo> expresionCondicional
 %type <tinfo> expresionIgualdad
 
+%type <ref> operadorAsignacion
+%type <ref> operadorLogico
+%type <ref> operadorIgualdad
+%type <ref> operadorRelacional
+%type <ref> operadorAditivo
+%type <ref> operadorMultiplicativo
 %type <ref> operadorUnario
+%type <ref> operadorIncremento
+
 
 %%
 
@@ -180,7 +197,7 @@ declaracionFuncion :
     emite(PUSHFP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
     /* Actualizamos el frame pointer a la posición actual de la pila */
     emite(FPTOP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
-    /* Rservamos espacio para las variable locales */
+    /* Reservamos espacio para las variables locales y temporales*/
     $<ref>$ = crea_lans(si);
     emite(INCTOP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(-1));
 }
@@ -188,6 +205,10 @@ declaracionFuncion :
 {
     /* Completamos la instrucción de reseva de memoria local */
     completa_lans($<ref>2, cr_arg_entero(dvar));
+    
+    completa_lans(finfunc, cr_arg_etiqueta(si));
+    finfunc = -1;
+    
     /* Actualizamos el tope de la pila al frame pointer  */
     emite(TOPFP, cr_arg_nulo(), cr_arg_nulo(), cr_arg_nulo());
     /* Actualizamos la pila */
@@ -216,48 +237,50 @@ cabeceraFuncion :
 }
   TK_OPAR parametrosFormales TK_CPAR
 {
+    /* Insertamos la función en la TDS */
     if(!inserta_simbolo($2, FUNCION, $1.tipo, si, GLOBAL, $5)) {
         yyerror("Identificador ya definido");
         fail = 1;
     }
-    else
-        dvar += $1.talla;
 }
 ;
 
 parametrosFormales :
-  listaParametrosFormales
-{
-    $$ = $1; /* redundante */
-}
-|
 {
     if (!fail)
         $$ = inserta_info_dominio(-1, T_VACIO);
+}
+| listaParametrosFormales
+{
+    $$ = $1; /* redundante */
 }
 ;
 
 listaParametrosFormales :
   tipoSimple TK_ID
 {
+    dpar += $1.talla;
     if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1)) {
         yyerror("Parámetro ya definido");
         fail = 1;
     }
     else if (!fail) {
         $$ = inserta_info_dominio(-1, $1.tipo);
-        dpar += $1.talla;
+        
     }
 }
-| tipoSimple TK_ID TK_COMMA listaParametrosFormales
+| tipoSimple TK_ID TK_COMMA 
 {
+    dpar += $1.talla;
     if(!inserta_simbolo($2, PARAMETRO, $1.tipo, -dpar, LOCAL, -1)) {
         yyerror("Parámetro ya definido");
         fail = 1;
     }
-    else {
-        dpar += $1.talla;
-        $$ = $4;
+}
+  listaParametrosFormales
+{    
+    if (!fail) {        
+        $$ = $5;
         inserta_info_dominio($$, $1.tipo);
     }
 }
@@ -297,7 +320,8 @@ instruccionEntradaSalida :
     SIMB simb = obtener_simbolo($3);
     if (simb.categoria != NULO) {
         if (simb.tipo == T_ENTERO) {
-            
+            emite(EREAD, cr_arg_nulo(), cr_arg_nulo(),
+                  cr_arg_posicion(simb.nivel, simb.desp));
         }
         else
             yyerror("La instrucción read solo acepta parámetros de tipo "
@@ -308,8 +332,8 @@ instruccionEntradaSalida :
 {
     switch ($3.tipo) {
         case T_LOGICO:
-            break;
         case T_ENTERO:
+            emite(EWRITE, cr_arg_nulo(), cr_arg_nulo(), $3.pos);
             break;
         default:
             yyerror("La instrucción print solo acepta parámetros de tipos "
@@ -322,20 +346,35 @@ instruccionSeleccion :
   TK_IF TK_OPAR expresion TK_CPAR
 {
     if ($3.tipo == T_LOGICO) {
+        $<tinsif>$.lans_falso = crea_lans(si);
+        emite(EIGUAL, $3.pos, cr_arg_entero(0), cr_arg_entero(-1));
     }
     else
         yyerror("La expresión condicional de la instrucción if no es "
                 "del tipo lógico");
 }
-  instruccion TK_ELSE instruccion
+  instruccion TK_ELSE
 {
+    $<tinsif>5.lans_fin = crea_lans(si);
+    emite(GOTOS, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(-1));
+    completa_lans($<tinsif>5.lans_falso, cr_arg_etiqueta(si));
+}
+  instruccion
+{
+    completa_lans($<tinsif>5.lans_fin, cr_arg_etiqueta(si));
 }
 ;
 
 instruccionIteracion :
-  TK_WHILE TK_OPAR expresion TK_CPAR
+  TK_WHILE 
 {
-    if ($3.tipo == T_LOGICO) {
+    $<tinswhile>$.cond = cr_arg_etiqueta(si);
+}
+  TK_OPAR expresion TK_CPAR
+{
+    if ($4.tipo == T_LOGICO) {
+        $<tinswhile>2.lans_fin = crea_lans(si);
+        emite(EIGUAL, $4.pos, cr_arg_entero(0), cr_arg_entero(-1));
     }
     else
         yyerror("La expresión condicional de la instrucción while no es "
@@ -343,15 +382,22 @@ instruccionIteracion :
 }
   instruccion
 {
+    emite(GOTOS, cr_arg_nulo(), cr_arg_nulo(), $<tinswhile>2.cond);
+    completa_lans($<tinswhile>2.lans_fin, cr_arg_etiqueta(si));
 }
 ;
 
 instruccionSalto :
   TK_RETURN expresion TK_COLON
 {
+    int lans;
     INF inf = obtener_info_funcion(-1); /* Info de la función actual */
     if (inf.tipo == $2.tipo) {
-        
+        emite(EASIG, $2.pos, cr_arg_nulo(),
+            cr_arg_posicion(contexto, -(dpar + 1)));
+        lans = crea_lans(si);
+        emite(GOTOS, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(-1));
+        finfunc = fusiona_lans(finfunc, lans);        
     } else if ($2.tipo != T_ERROR) 
         yyerror("El tipo del valor devuelto no coincide con el de "
                 "la función");
@@ -366,12 +412,13 @@ expresion :
 | TK_ID operadorAsignacion expresion
 {
     SIMB simb = obtener_simbolo($1);
+    TIPO_ARG pos = $3.pos;
     if (simb.categoria == VARIABLE || simb.categoria == PARAMETRO) {
         switch (simb.tipo) {
             case T_LOGICO:
                 switch ($3.tipo) {
                     case T_LOGICO:
-                        $$ = tlogico;
+                        $$ = tlogico;                        
                         break;
                     case T_ENTERO:
                         $$ = tlogico;
@@ -381,20 +428,13 @@ expresion :
                         yyerror("Variable de tipo lógico asignado a un valor "
                                 "de tipo no lógico");
                         $$ = terror;
-                }            
-                // if ($3.tipo == T_LOGICO)
-                //     $$ = tlogico;
-                // else {
-                //     if ($3.tipo != T_ERROR)
-                //         yyerror("Variable de tipo lógico asignado a un valor"
-                //                 "de tipo no lógico");
-                //     $$ = terror;
-                // }
+                }   
                 break;
             case T_ENTERO:
                 switch ($3.tipo) {
                     case T_LOGICO:
                         $$ = tentero;
+                        pos = emite_entero_a_bool($3.pos);
                         break;
                     case T_ENTERO:
                         $$ = tentero;
@@ -410,6 +450,21 @@ expresion :
                     yyerror("Asignación no válida");
                 $$ = terror;
         }
+        
+        $$.pos = cr_arg_posicion(simb.nivel, simb.desp);
+        
+        switch ($2) {            
+            case TK_ASIG:
+            default:             
+                emite(EASIG, pos, cr_arg_nulo(), $$.pos);
+                break;
+            case TK_SUMASIG:
+                emite(ESUM, $$.pos, pos, $$.pos);
+                break;
+            case TK_SUBASIG:
+                emite(EDIF, $$.pos, pos, $$.pos);
+                break;
+        }
     }
     else {
         if (simb.categoria == FUNCION)
@@ -422,6 +477,8 @@ expresion :
 {
     DIM dim;
     SIMB simb = obtener_simbolo($1);
+    TIPO_ARG base, tmp;
+    base = cr_arg_posicion(simb.nivel, simb.desp);
     
     if (simb.categoria != NULO)
         if (simb.tipo == T_ARRAY) {
@@ -430,9 +487,40 @@ expresion :
                 switch (dim.tipo) {
                     case T_ENTERO:
                         $$ = tentero;
+                        $$.pos = $6.pos;               
+                        switch ($5) {            
+                            case TK_ASIG:
+                            default:             
+                                emite(EVA, base, $3.pos, $6.pos);
+                                break;
+                            case TK_SUMASIG:
+                                tmp = cr_arg_posicion(contexto,crea_var_temp());
+                                emite(EAV, base, $3.pos, tmp);                                
+                                emite(ESUM, tmp, $6.pos, tmp);
+                                emite(EVA, base, $3.pos, tmp);
+                                break;
+                            case TK_SUBASIG:
+                                tmp = cr_arg_posicion(contexto,crea_var_temp());
+                                emite(EAV, base, $3.pos, tmp);                                
+                                emite(EDIF, tmp, $6.pos, tmp);
+                                emite(EVA, base, $3.pos, tmp);                            
+                                break;
+                        }                     
                         break;
+                        
                     case T_LOGICO:
-                        $$ = tlogico;
+                        if ($5 == TK_ASIG) {
+                            $$ = tlogico;
+                            $$.pos = ($6.tipo == T_ENTERO) ?
+                                     emite_entero_a_bool($6.pos) : $6.pos;
+                            emite(EVA, base, $3.pos, $6.pos);
+                            break;                       
+                        }
+                        else {
+                            $$ = terror;
+                            yyerror("Operación escalar sobre un vector "
+                                    "booleano");
+                        }                        
                         break;
                     default:
                         $$ = terror;
@@ -459,8 +547,18 @@ expresionCondicional :
 }
 | expresionCondicional operadorLogico expresionIgualdad
 {
-    if ($1.tipo == T_LOGICO && $3.tipo == T_LOGICO)
+    TIPO_ARG lhs, rhs, res;
+    
+    if (($1.tipo == T_LOGICO || $1.tipo == T_ENTERO) &&
+       ($3.tipo == T_LOGICO || $3.tipo == T_ENTERO)) {
         $$ = tlogico;
+        lhs = ($1.tipo == T_ENTERO) ? emite_entero_a_bool($1.pos) : $1.pos;
+        rhs = ($3.tipo == T_ENTERO) ? emite_entero_a_bool($3.pos) : $3.pos;
+        res = cr_arg_posicion(contexto, crea_var_temp());
+        emite($2, lhs, rhs, res);
+        emite(ETOB, res, cr_arg_nulo(), res);
+        $$.pos = res;    
+    }
     else
         $$ = terror;
 }
@@ -473,8 +571,25 @@ expresionIgualdad :
 }
 | expresionIgualdad operadorIgualdad expresionRelacional
 {
-    /* TODO: Conversion de tipos*/
+    TIPO_ARG lhs, rhs;
+    
+    /* Si alguno de los dos valores a comparar son del tipo lógico, hay que
+       que realizar una conversión de tipo entero a bool en los valores
+       enteros */
+    if ($1.tipo == T_LOGICO || $3.tipo == T_LOGICO) {
+        lhs = ($1.tipo == T_ENTERO) ? emite_entero_a_bool($1.pos) : $1.pos;
+        rhs = ($3.tipo == T_ENTERO) ? emite_entero_a_bool($3.pos) : $3.pos;        
+    }
+    else {
+        lhs = $1.pos;
+        rhs = $3.pos;
+    }
+    
     $$ = tlogico;
+    $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+    emite(EASIG, cr_arg_entero(1), cr_arg_nulo(), $$.pos);
+    emite($2, $1.pos, $3.pos, cr_arg_etiqueta(si + 2));
+    emite(EASIG, cr_arg_entero(0), cr_arg_nulo(), $$.pos);
 }
 ;
 
@@ -485,8 +600,11 @@ expresionRelacional :
 }
 | expresionRelacional operadorRelacional expresionAditiva
 {
-    /* TODO: Conversion de tipos*/
     $$ = tlogico;
+    $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+    emite(EASIG, cr_arg_entero(1), cr_arg_nulo(), $$.pos);
+    emite($2, $1.pos, $3.pos, cr_arg_etiqueta(si + 2));
+    emite(EASIG, cr_arg_entero(0), cr_arg_nulo(), $$.pos);
 }
 ;
 
@@ -497,8 +615,11 @@ expresionAditiva :
 }
 | expresionAditiva operadorAditivo expresionMultiplicativa
 {
-    if ($1.tipo == T_ENTERO && $3.tipo == T_ENTERO)
-        $$ = $1;
+    if ($1.tipo == T_ENTERO && $3.tipo == T_ENTERO) {
+        $$ = tentero;
+        $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+        emite($2, $1.pos, $3.pos, $$.pos);
+    }
     else {
         if ($1.tipo != T_ERROR && $3.tipo != T_ERROR)
             yyerror("Operación aditiva con un argumento no entero");
@@ -514,8 +635,11 @@ expresionMultiplicativa :
 }
 | expresionMultiplicativa operadorMultiplicativo expresionUnaria
 {
-    if ($1.tipo == T_ENTERO && $3.tipo == T_ENTERO)
-        $$ = $1;
+    if ($1.tipo == T_ENTERO && $3.tipo == T_ENTERO) {
+        $$ = tentero;
+        $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+        emite($2, $1.pos, $3.pos, $$.pos);
+    }
     else {
         yyerror("Operación multiplicativa con un argumento no entero");
         $$ = terror;
@@ -531,15 +655,23 @@ expresionUnaria :
 | operadorUnario expresionUnaria
 {
     if ($1 == TK_NOT)
-        if ($2.tipo == T_LOGICO)
+        if ($2.tipo == T_LOGICO) {
             $$ = $2;
+            $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+            emite(EASIG, cr_arg_entero(1), cr_arg_nulo(), $$.pos);
+            emite(EIGUAL, $2.pos, cr_arg_entero(0), cr_arg_etiqueta(si + 2));
+            emite(EASIG, cr_arg_entero(0), cr_arg_nulo(), $$.pos);
+        }
         else {
             yyerror("Operador lógico aplicado a un valor no booleano");
             $$ = terror;
         }
     else 
-        if ($2.tipo == T_ENTERO)
+        if ($2.tipo == T_ENTERO) {
             $$ = $2;
+            $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+            emite(EMULT, cr_arg_entero(-1), $2.pos, $$.pos);            
+        }
         else {
             yyerror("Op. unario aritmetico aplicado a un valor no valido");
             $$ = terror;
@@ -551,8 +683,11 @@ expresionUnaria :
     SIMB simb = obtener_simbolo($2);
     if (simb.categoria != NULO) {
         TINFO tinfo = obtener_tipo(simb);
-        if (tinfo.tipo == T_ENTERO)
+        if (tinfo.tipo == T_ENTERO) {
             $$ = tinfo;
+            $$.pos = cr_arg_posicion(simb.nivel, simb.desp);
+            emite($1, $$.pos, cr_arg_entero(1), $$.pos);
+        }
         else {
             yyerror("Op. de incremento no válido");
             $$ = terror;
@@ -576,6 +711,9 @@ expresionSufija :
                 tinfo.tipo = simb.tipo = dim.tipo;
                 tinfo.talla = obtener_talla(simb);
                 $$ = tinfo;
+                $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+                emite(EAV, cr_arg_posicion(simb.nivel, simb.desp),
+                      $3.pos, $$.pos);
             }
             else {
                 yyerror("El desplazamiento del array no es un entero");
@@ -589,20 +727,28 @@ expresionSufija :
     else
         $$ = terror;
 }
-| TK_ID TK_OPAR parametrosActuales TK_CPAR
+| 
+  TK_ID 
+{
+    emite(EPUSH, cr_arg_nulo(), cr_arg_nulo(), cr_arg_entero(0));
+}
+  TK_OPAR parametrosActuales TK_CPAR
 {
     int cmp;
     SIMB simb = obtener_simbolo($1);
     
     if (simb.categoria != NULO)
         if (simb.categoria == FUNCION) {
-            #if __APPLE__
-                cmp = !compara_dominio(simb.ref, $3);
-            #else
-                cmp = compara_dominio(simb.ref, $3);
-            #endif
-            if (cmp)
+            cmp = compara_dominio(simb.ref, $4);
+            if (cmp) {
                 $$ = obtener_tipo(simb);
+                $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+                emite(CALL, cr_arg_nulo(), cr_arg_nulo(),
+                      cr_arg_etiqueta(simb.desp));
+                emite(DECTOP, cr_arg_nulo(), cr_arg_nulo(),
+                      cr_arg_entero(obtener_info_funcion(simb.ref).tparam));
+                emite(EPOP, cr_arg_nulo(), cr_arg_nulo(), $$.pos);                 
+            }
             else
                 $$ = terror;
         }
@@ -616,10 +762,17 @@ expresionSufija :
 | TK_ID operadorIncremento
 {
     SIMB simb = obtener_simbolo($1);
+    TIPO_ARG tmp;
+    
     if (simb.categoria != NULO) {
         TINFO tinfo = obtener_tipo(simb);
-        if (tinfo.tipo == T_ENTERO)
+        if (tinfo.tipo == T_ENTERO) {
             $$ = tinfo;
+            tmp = cr_arg_posicion(simb.nivel, simb.desp);
+            $$.pos = cr_arg_posicion(contexto, crea_var_temp());
+            emite(EASIG, tmp, cr_arg_nulo(), $$.pos);
+            emite($2, tmp, cr_arg_entero(1), tmp);
+        }
         else {
             yyerror("Op. de incremento no válido");
             $$ = terror;
@@ -637,7 +790,7 @@ expresionSufija :
     SIMB simb = obtener_simbolo($1);
     if (simb.categoria != NULO)
         if (simb.categoria != FUNCION)
-            $$ = obtener_tipo(simb);
+            $$ = obtener_tipo(simb);            
         else {
             yyerror("Referencia a función no válida");
             $$ = terror;
@@ -648,25 +801,27 @@ expresionSufija :
 | TK_CTE
 {
     $$ = tentero;
+    $$.pos = cr_arg_entero(yylval.cte);
 }
 | TK_TRUE
 {
     $$ = tlogico;
+    $$.pos = cr_arg_entero(1);
 }
 | TK_FALSE
 {
     $$ = tlogico;
+    $$.pos = cr_arg_entero(0);
 }
 ;
 
 parametrosActuales :
-  listaParametrosActuales
-{
-    $$ = $1; /* redundante */
-}
-|
 {
     $$ = inserta_info_dominio(-1, T_VACIO);
+}
+| listaParametrosActuales
+{
+    $$ = $1; /* redundante */
 }
 ;
 
@@ -674,50 +829,103 @@ listaParametrosActuales :
   expresion
 {
     $$ = inserta_info_dominio(-1, $1.tipo);
+    emite(EPUSH, cr_arg_nulo(), cr_arg_nulo(), $1.pos);
 }
-| expresion TK_COMMA listaParametrosActuales
+| expresion TK_COMMA listaParametrosActuales  
 {
+    inserta_info_dominio($3, $1.tipo);
     $$ = $3;
-    inserta_info_dominio($$, $1.tipo);
+    emite(EPUSH, cr_arg_nulo(), cr_arg_nulo(), $1.pos);
 }
 ;
 
 operadorAsignacion :
   TK_ASIG
+{
+    $$ = TK_ASIG;
+}
 | TK_SUMASIG
+{
+    $$ = TK_SUMASIG;
+}
 | TK_SUBASIG
+{
+    $$ = TK_SUBASIG
+}
 ;
 
 operadorLogico :
   TK_AND
+{
+    $$ = EMULT;
+}
 | TK_OR
+{
+    $$ = ESUM;
+}
 ;
 
 operadorIgualdad :
   TK_EQUAL
+{
+    $$ = EIGUAL;
+}
 | TK_NEQUAL
+{
+    $$ = EDIST;
+}
 ;
 
 operadorRelacional :
   TK_LESS
+{
+    $$ = EMEN;
+}
 | TK_GREAT
+{
+    $$ = EMAY;
+}
 | TK_LESSEQ
+{
+    $$ = EMENEQ;
+}
 | TK_GREATEQ
+{
+    $$ = EMAYEQ;
+}
 ;
 
 operadorAditivo :
   TK_PLUS
+{
+    $$ = ESUM;
+}
 | TK_MINUS
+{
+    $$ = EDIF;
+}
 ;
 
 operadorMultiplicativo :
   TK_MULT
+{
+    $$ = EMULT;
+}
 | TK_DIV
+{
+    $$ = EDIVI;
+}
 ;
 
 operadorIncremento :
   TK_INC
+{
+    $$ = ESUM;
+}
 | TK_DEC
+{
+    $$ = EDIF;
+}
 ;
 
 operadorUnario :
@@ -739,12 +947,21 @@ operadorUnario :
 %%
 
 
+TIPO_ARG emite_entero_a_bool (TIPO_ARG entero)
+{
+    TIPO_ARG res = cr_arg_posicion(contexto, crea_var_temp());
+    emite(ETOB, entero, cr_arg_nulo(), res);
+    
+    return res;
+};
+
 TINFO obtener_tipo (SIMB simb)
 {
     TINFO ret;
     
     ret.tipo = simb.tipo;
     ret.talla = obtener_talla(simb);
+    ret.pos = cr_arg_posicion(simb.nivel, simb.desp);
     
     return ret;
 }

@@ -1,4 +1,9 @@
 
+/*
+ * Domínguez Cartagena, Luis (luidoca@fiv.upv.es)
+ * Lanza Duarte, Gustavo (guslandu@fiv.upv.es)
+ * Vilanova Vidal, Álvaro (alvivi@fiv.upv.es)
+ */
 
 %{
 
